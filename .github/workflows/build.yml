@@ -141,8 +141,12 @@ jobs:
 
   release:
     name: GitHub release
-    # Version tags get a permanent release; every push to main refreshes the "latest" pre-release.
-    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    # Version tags get a permanent release. Pushes to main refresh the "latest" pre-release, and each
+    # pull request from this repository gets its own "pr-N-snapshot" pre-release, replaced on every push.
+    if: >-
+      startsWith(github.ref, 'refs/tags/v') ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
     needs: [android, ios]
     runs-on: ubuntu-latest
     steps:
@@ -159,14 +163,23 @@ jobs:
             Eyecad*.ipa
           generate_release_notes: true
 
-      - name: Publish latest build from main
-        if: github.ref == 'refs/heads/main'
+      - name: Publish snapshot
+        if: "!startsWith(github.ref, 'refs/tags/v')"
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
-          gh release delete latest --cleanup-tag --yes || true
-          gh release create latest Eyecad.apk Eyecad*.ipa \
-            --prerelease --target "$GITHUB_SHA" \
-            --title "Latest build from main" \
-            --notes "Built from ${GITHUB_SHA::7}. Replaced on every push to main; tag v* for a permanent release."
+          if [ -n "$PR_NUMBER" ]; then
+            TAG="pr-$PR_NUMBER-snapshot"
+            TITLE="Snapshot of PR #$PR_NUMBER"
+            NOTES="Built from ${SHA::7} on pull request #$PR_NUMBER. Replaced on every push to the PR."
+          else
+            TAG="latest"
+            TITLE="Latest build from main"
+            NOTES="Built from ${SHA::7}. Replaced on every push to main; tag v* for a permanent release."
+          fi
+          gh release delete "$TAG" --cleanup-tag --yes || true
+          gh release create "$TAG" Eyecad.apk Eyecad*.ipa \
+            --prerelease --target "$SHA" --title "$TITLE" --notes "$NOTES"
