@@ -190,9 +190,11 @@ class MainActivity : Activity() {
         // Kept in the cache until the next scan, so it can be saved, shared or previewed any number of times.
         val dir = File(cacheDir, "scans").apply { deleteRecursively(); mkdirs() }
         val name = "scan-" + SimpleDateFormat("yyyyMMdd-HHmmss", Locale.ROOT).format(Date())
-        lastFiles = listOf(
+        lastFiles = listOfNotNull(
             File(dir, "$name.geojson").apply { writeText(export.geoJson) },
             File(dir, "$name.obj").apply { writeText(export.obj) },
+            // Raw planes and points, so the scan can be rebuilt with future versions.
+            export.capture?.let { c -> File(dir, "$name-capture.json").apply { writeText(c) } },
         )
         scanning = false
         scanButton.isEnabled = true
@@ -204,7 +206,7 @@ class MainActivity : Activity() {
     private fun askWhereToSave() {
         AlertDialog.Builder(this)
             .setTitle("Save scan")
-            .setMessage("Save ${lastFiles.joinToString(" and ") { it.name }} to ${saveLocation.label}?")
+            .setMessage("Save ${lastFiles.joinToString(", ") { it.name }} to ${saveLocation.label}?")
             .setPositiveButton("Save here") { _, _ -> saveToDefault() }
             .setNeutralButton("Choose folder…") { _, _ ->
                 startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE), REQUEST_FOLDER)

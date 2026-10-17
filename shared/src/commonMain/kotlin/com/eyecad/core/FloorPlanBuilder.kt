@@ -29,6 +29,8 @@ object FloorPlanBuilder {
     private const val SIDE_TOLERANCE = 0.35
     /** Interior wall lines at least this long are partitions; shorter ones are furniture. */
     private const val PARTITION_LENGTH = 1.5
+    /** ...and must reach at least this high (m above the floor); lower ones are furniture. */
+    private const val PARTITION_TOP = 1.8
 
     fun floorHeight(planes: List<PlaneObservation>): Double? {
         val floors = planes.filter { it.kind == PlaneKind.FLOOR && it.boundary.size >= 3 }
@@ -54,13 +56,14 @@ object FloorPlanBuilder {
         val segments = planes.filter { it.kind == PlaneKind.WALL }.mapNotNull { segmentOf(it, floorY) }
         val dominant = dominantAngle(segments)
         val aligned = mutableListOf<Segment>()
+        val offAxis = mutableListOf<Segment>()
         val furniture = mutableListOf<Segment>()
         for (seg in segments) {
             val snapped = snap(seg, dominant)
             when {
                 dominant == null || snapped !== seg -> aligned += snapped
-                // Off-axis planes: long ones are real walls, short ones are furniture or noise.
-                seg.length >= PARTITION_LENGTH -> aligned += seg
+                // Off-axis planes: long ones may be real walls of an odd-shaped room, short ones are furniture.
+                seg.length >= PARTITION_LENGTH -> offAxis += seg
                 else -> furniture += seg
             }
         }
@@ -74,14 +77,17 @@ object FloorPlanBuilder {
         val room = dominant?.let { squareUp(merged, it, floorPoints) }
         if (room != null) {
             outline = room.corners
+            // Inside a squared room only long, full-height lines are partitions. Sofa backs and cabinet
+            // fronts are long too, but they stop well below the ceiling.
+            val (partitions, low) = room.interior.partition { it.length >= PARTITION_LENGTH && it.top >= PARTITION_TOP }
             walls = room.sides.map { side ->
                 Wall(side.a, side.b, height = max(height, side.top), thickness = 0.1, confidence = side.confidence)
-            } + room.interior.filter { it.length >= PARTITION_LENGTH }.map {
+            } + partitions.map {
                 Wall(it.a, it.b, height = max(height, it.top), thickness = 0.1, confidence = it.confidence)
             }
-            furniture += room.interior.filter { it.length < PARTITION_LENGTH }
+            furniture += low + offAxis
         } else {
-            walls = joinCorners(merged).filter { it.length >= MIN_WALL_LENGTH }.map {
+            walls = joinCorners(merge(aligned + offAxis)).filter { it.length >= MIN_WALL_LENGTH }.map {
                 Wall(it.a, it.b, height = max(height, it.top), thickness = 0.1, confidence = it.confidence)
             }
             outline = Geometry.convexHull(floorPoints + walls.flatMap { listOf(it.start, it.end) })

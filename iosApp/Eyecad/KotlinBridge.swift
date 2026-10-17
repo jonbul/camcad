@@ -36,7 +36,7 @@ enum KotlinBridge {
 
     static var now: String { ISO8601DateFormatter().string(from: Date()) }
 
-    /// Writes both export files to a staging folder, where they stay until the next scan so they can be
+    /// Writes the export files to a staging folder, where they stay until the next scan so they can be
     /// saved, shared and previewed any number of times.
     static func stage(_ export: ScanExport) throws -> [URL] {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("scans", isDirectory: true)
@@ -50,6 +50,10 @@ enum KotlinBridge {
         let obj = dir.appendingPathComponent("\(name).obj")
         try export.geoJson.write(to: geo, atomically: true, encoding: .utf8)
         try export.obj.write(to: obj, atomically: true, encoding: .utf8)
-        return [geo, obj]
+        guard let capture = export.capture else { return [geo, obj] }
+        // Raw planes and points, so the scan can be rebuilt with future versions.
+        let raw = dir.appendingPathComponent("\(name)-capture.json")
+        try capture.write(to: raw, atomically: true, encoding: .utf8)
+        return [geo, obj, raw]
     }
 }

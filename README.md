@@ -69,6 +69,8 @@ cd iosApp && xcodegen generate && open Eyecad.xcodeproj
 
 Allow location access so the map is placed on the globe; without it the GeoJSON uses local meters.
 
+Camera scans also save `scan-<date>-capture.json` with the raw AR planes and feature points (no location). Opening it in **Preview** rebuilds the room with the current version of the app, and it's the file to share when a scan comes out wrong.
+
 ## Output
 
 See [docs/output-format.md](docs/output-format.md). In short, the GeoJSON is a FeatureCollection of footprint polygons (`room`, `wall`, `door`, `window`, `opening`, `object`) whose `base_height`/`height` properties extrude them into 3D in MapLibre, Mapbox, deck.gl or QGIS. The OBJ has one named group per element, e.g. `object_3_sofa`.

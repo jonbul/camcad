@@ -40,4 +40,19 @@ class PreviewTest {
         assertEquals("room", view.polygons.first().kind)
         assertEquals(m.solids.count { it.kind == "object" }, view.labels.size) // every object shows its height
     }
+
+    @Test
+    fun captureRebuildsTheSameRoom() {
+        val session = CameraScanSession(CaptureMode.CAMERA_ARCORE)
+        SyntheticRoom.planes().forEach(session::upsertPlane)
+        var id = 0L
+        for (x in 10..28) for (y in 36..45) session.addPoint(id++, SyntheticRoom.p(x / 10.0, y / 10.0).x, SyntheticRoom.FLOOR_Y + 0.85, -SyntheticRoom.p(x / 10.0, y / 10.0).y)
+        val export = session.export("test", "2026-10-17T00:00:00Z", null, null, null, null)
+        val text = export.capture!!
+        assertTrue(Capture.isCapture(text))
+        val again = Capture.parse(text).floorPlan()
+        assertEquals(export.plan.walls.size, again.walls.size)
+        assertEquals(export.plan.objects.size, again.objects.size)
+        assertEquals(counts(PreviewModel.fromPlan(export.plan, "a")), counts(PreviewModel.fromFile("x-capture.json", text)))
+    }
 }

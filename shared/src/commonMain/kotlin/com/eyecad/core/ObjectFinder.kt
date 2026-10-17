@@ -15,11 +15,15 @@ object ObjectFinder {
     private const val CELL = 0.1
     /** Points closer than this to a wall belong to the wall. */
     private const val WALL_MARGIN = 0.2
-    private const val MIN_HEIGHT = 0.08
+    /** ARCore floor points scatter a few cm, so lower evidence is floor noise. */
+    private const val MIN_HEIGHT = 0.15
     /** AR point clouds are sparse, so single points count; a blob needs this many to be an object. */
     private const val MIN_POINTS = 12
     /** Cells this many apart still count as one object (bridges sparse point coverage). */
     private const val LINK = 2
+    /** A point-only cell needs this many points in its 3x3 neighbourhood; stray points would otherwise
+     *  bridge the gap between pieces of furniture (a sofa facing a cabinet across a walkway). */
+    private const val MIN_LOCAL_POINTS = 4
 
     private class Cell {
         val heights = mutableListOf<Double>()
@@ -76,7 +80,14 @@ object ObjectFinder {
             }
         }
 
-        val occupied = grid.filterValues { it.surface || it.hits > 0 }
+        fun localHits(k: Long): Int {
+            val ci = (k shr 32).toInt()
+            val cj = k.toInt()
+            var n = 0
+            for (di in -1..1) for (dj in -1..1) n += grid[key(ci + di, cj + dj)]?.hits ?: 0
+            return n
+        }
+        val occupied = grid.filter { (k, c) -> c.surface || (c.hits > 0 && localHits(k) >= MIN_LOCAL_POINTS) }
         val seen = HashSet<Long>()
         val objects = mutableListOf<RoomObject>()
         for (start in occupied.keys) {

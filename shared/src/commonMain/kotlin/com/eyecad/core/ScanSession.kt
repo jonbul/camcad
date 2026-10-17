@@ -3,8 +3,8 @@ package com.eyecad.core
 /** Live counters for the scanning screen. */
 data class ScanStats(val planes: Int, val walls: Int, val objects: Int, val points: Int, val headingSamples: Int)
 
-/** Both export files for one scan. */
-data class ScanExport(val geoJson: String, val obj: String, val plan: FloorPlan)
+/** The export files for one scan; [capture] is the raw AR data of camera scans (see [Capture]). */
+data class ScanExport(val geoJson: String, val obj: String, val plan: FloorPlan, val capture: String? = null)
 
 /**
  * The shared brain of a camera-only scan (ARCore on Android, ARKit on iPhones without LiDAR).
@@ -45,7 +45,7 @@ class CameraScanSession(private val mode: CaptureMode) {
         return ScanStats(planes.size, plan.walls.size, plan.objects.size, points.size, heading.samples)
     }
 
-    fun floorPlan(): FloorPlan = FloorPlanBuilder.build(planes.values.toList(), points.values.toList(), currentFloorY())
+    fun floorPlan(): FloorPlan = FloorPlanBuilder.build(planes.values.toList(), points.values.toList(), fallbackFloorY())
 
     /**
      * When the AR session itself is aligned to true north (ARKit gravityAndHeading), pass [rotationDeg] = 0
@@ -63,12 +63,15 @@ class CameraScanSession(private val mode: CaptureMode) {
             val r = rotationDeg ?: heading.rotationDeg()
             if (r != null) Georef(latitude, longitude, r, altitude) else null
         } else null
-        return ScanExporter.export(floorPlan(), ScanMetadata(mode, device, createdAt, georef))
+        val capture = capture()
+        return ScanExporter.export(capture.floorPlan(), ScanMetadata(mode, device, createdAt, georef))
+            .copy(capture = capture.write())
     }
 
+    fun capture(): Capture = Capture(mode, planes.values.toList(), points.values.toList(), fallbackFloorY())
+
     /** Before the floor is detected, assume it is ~1.4 m below the phone. */
-    private fun currentFloorY(): Double =
-        FloorPlanBuilder.floorHeight(planes.values.toList()) ?: ((lastCameraY ?: 0.0) - 1.4)
+    private fun fallbackFloorY(): Double = (lastCameraY ?: 0.0) - 1.4
 
     private companion object {
         const val MAX_POINTS = 60_000

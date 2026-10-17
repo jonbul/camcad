@@ -151,6 +151,50 @@ class ObjectFinderTest {
         assertEquals(1.0, sofa.depth, 0.25)
         assertTrue(sofa.center.distanceTo(SyntheticRoom.p(1.9, 4.05)) < 0.15, "sofa at ${sofa.center}")
     }
+
+    /** Living room scanned on a Pixel 8 Pro: a cabinet along one wall and a sofa facing it across a walkway. */
+    @Test
+    fun sofaFacingCabinetStaysTwoObjects() {
+        var seed = 7L
+        fun rnd(): Double {
+            seed = (seed * 6364136223846793005L + 1442695040888963407L)
+            return ((seed ushr 11).toDouble() / (1L shl 53).toDouble())
+        }
+        val points = mutableListOf<Vec3>()
+        fun scatter(x0: Double, x1: Double, y0: Double, y1: Double, h: Double, perM2: Int) {
+            repeat(((x1 - x0) * (y1 - y0) * perM2).toInt()) {
+                points += SyntheticRoom.p(x0 + rnd() * (x1 - x0), y0 + rnd() * (y1 - y0)).toWorld(SyntheticRoom.FLOOR_Y + h + (rnd() - 0.5) * 0.04)
+            }
+        }
+        scatter(0.6, 3.4, 0.25, 0.7, 0.6, 90) // cabinet top
+        scatter(0.8, 3.0, 2.0, 2.7, 0.45, 70) // seat
+        scatter(0.8, 3.0, 2.7, 2.9, 0.9, 120) // backrest
+        // ARCore floor points a few cm off, and the odd stray point in the walkway.
+        repeat(300) { points += SyntheticRoom.p(0.5 + rnd() * 3.0, 0.8 + rnd() * 1.1).toWorld(SyntheticRoom.FLOOR_Y + rnd() * 0.13) }
+        repeat(25) { points += SyntheticRoom.p(0.5 + rnd() * 3.0, 0.8 + rnd() * 1.1).toWorld(SyntheticRoom.FLOOR_Y + 0.2 + rnd() * 1.2) }
+
+        fun vertical(id: String, a: Vec2, b: Vec2, top: Double): PlaneObservation {
+            val n = (b - a).normalized().perp()
+            return PlaneObservation(id, PlaneKind.WALL, Vec3(n.x, 0.0, -n.y),
+                listOf(a.toWorld(SyntheticRoom.FLOOR_Y + 0.3), b.toWorld(SyntheticRoom.FLOOR_Y + 0.3),
+                    b.toWorld(SyntheticRoom.FLOOR_Y + top), a.toWorld(SyntheticRoom.FLOOR_Y + top)))
+        }
+        val planes = SyntheticRoom.planes().filter { it.id != "table" } +
+            vertical("sofa-back", SyntheticRoom.p(0.8, 2.9), SyntheticRoom.p(3.0, 2.9), 0.9) +
+            // The sofa's back seen at an odd angle, as in the user's scan.
+            vertical("skewed", SyntheticRoom.p(1.1, 1.6), SyntheticRoom.p(2.3, 3.4), 1.0)
+
+        val plan = FloorPlanBuilder.build(planes, points)
+        assertEquals(4, plan.walls.size, "walls: ${plan.walls}")
+        assertEquals(2, plan.objects.size, "objects: ${plan.objects.map { "${it.center} ${it.width}x${it.depth}x${it.height}" }}")
+        val (a, b) = plan.objects
+        val cabinet = listOf(a, b).minBy { it.center.distanceTo(SyntheticRoom.p(2.0, 0.45)) }
+        val sofa = listOf(a, b).first { it !== cabinet }
+        assertTrue(cabinet.center.distanceTo(SyntheticRoom.p(2.0, 0.45)) < 0.3, "cabinet at ${cabinet.center}")
+        assertTrue(sofa.center.distanceTo(SyntheticRoom.p(1.9, 2.45)) < 0.3, "sofa at ${sofa.center}")
+        assertEquals(0.6, cabinet.height, 0.1)
+        assertEquals(0.9, sofa.height, 0.1)
+    }
 }
 
 class GeorefTest {

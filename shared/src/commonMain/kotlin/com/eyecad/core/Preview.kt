@@ -64,8 +64,11 @@ class PreviewModel(val solids: List<PreviewSolid>, val title: String) {
 
         /** Picks the reader from the file name, falling back to sniffing the content. */
         @Throws(Exception::class)
-        fun fromFile(name: String, text: String): PreviewModel =
-            if (name.lowercase().endsWith(".obj") || !text.trimStart().startsWith("{")) fromObj(text, name) else fromGeoJson(text, name)
+        fun fromFile(name: String, text: String): PreviewModel = when {
+            Capture.isCapture(text) -> fromPlan(Capture.parse(text).floorPlan(), name)
+            name.lowercase().endsWith(".obj") || !text.trimStart().startsWith("{") -> fromObj(text, name)
+            else -> fromGeoJson(text, name)
+        }
 
         /** Reads an Eyecad GeoJSON (or any GeoJSON with polygon footprints and base_height/height). */
         @Throws(Exception::class)
