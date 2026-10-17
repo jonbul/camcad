@@ -29,7 +29,7 @@ Every push and pull request runs **Build** in GitHub Actions and attaches:
 - `Eyecad-android` → `Eyecad.apk`, installable on any ARCore phone (enable "install unknown apps").
 - `Eyecad-ios` → `Eyecad-unsigned.ipa`, or `Eyecad.ipa` when signing secrets are configured.
 
-Pushing a tag like `v1.0.0` also creates a GitHub Release with both files.
+Every push to `main` also refreshes the **latest** pre-release on the Releases page with both files, and pushing a tag like `v1.0.0` creates a permanent release.
 
 ### Installing on iPhone
 
