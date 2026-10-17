@@ -1,0 +1,13 @@
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+.DS_Store
+.kotlin/
+# Downloaded at build time
+androidApp/src/main/assets/*.tflite
+iosApp/Eyecad/Models/*.mlmodel
+iosApp/Eyecad.xcodeproj/
+xcuserdata/
+iosApp/Eyecad/Info.plist
