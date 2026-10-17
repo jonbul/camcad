@@ -55,7 +55,7 @@ object SyntheticRoom {
 class FloorPlanBuilderTest {
     @Test
     fun rebuildsFourCornerRoom() {
-        val plan = FloorPlanBuilder.build(SyntheticRoom.planes(), emptyList())
+        val plan = FloorPlanBuilder.build(SyntheticRoom.planes())
         assertEquals(4, plan.walls.size, "walls: ${plan.walls}")
         val corners = listOf(
             SyntheticRoom.p(0.0, 0.0), SyntheticRoom.p(SyntheticRoom.W, 0.0),
@@ -67,7 +67,7 @@ class FloorPlanBuilderTest {
             assertTrue(nearest < 0.08, "corner $c is ${nearest}m from the nearest wall end")
         }
         val area = abs(Geometry.signedArea(plan.floor))
-        assertTrue(abs(area - SyntheticRoom.W * SyntheticRoom.D) < 1.0, "area $area")
+        assertTrue(abs(area - SyntheticRoom.W * SyntheticRoom.D) < 0.5, "area $area")
         assertTrue(plan.heightEstimated)
     }
 
@@ -75,74 +75,85 @@ class FloorPlanBuilderTest {
     fun floorIgnoresTableTop() {
         assertEquals(SyntheticRoom.FLOOR_Y, FloorPlanBuilder.floorHeight(SyntheticRoom.planes())!!, 1e-9)
     }
-}
-
-class DetectionProjectorTest {
-    private val frame = CameraFrame(
-        pose = Pose.lookingAlong(Vec3(0.0, 0.0, 0.0), Vec3(0.0, -0.2, -1.0)),
-        fx = 500.0, fy = 500.0, cx = 320.0, cy = 240.0, imageWidth = 640.0, imageHeight = 480.0,
-    )
-
-    /** Projects a world point to sensor pixels with the same camera model. */
-    private fun pixel(p: Vec3): Vec2 {
-        val d = p - frame.pose.position
-        val x = d dot frame.pose.right
-        val y = d dot frame.pose.up
-        val z = d dot frame.pose.back
-        return Vec2(frame.cx + frame.fx * x / -z, frame.cy - frame.fy * y / -z)
-    }
 
     @Test
-    fun recoversChairSizeAndPosition() {
-        val floorY = -1.4
-        // Chair front face 3 m ahead, 0.5 m wide, 0.9 m tall.
-        val front = Vec3(0.2, floorY, -3.0)
-        val d = Detection2D(
-            label = "chair", confidence = 0.8,
-            bottomCenter = pixel(front),
-            topCenter = pixel(front + Vec3(0.0, 0.9, 0.0)),
-            bottomLeft = pixel(front + Vec3(-0.25, 0.0, 0.0)),
-            bottomRight = pixel(front + Vec3(0.25, 0.0, 0.0)),
-            cutOffAtBottom = false,
+    fun tableTopBecomesAnObject() {
+        val plan = FloorPlanBuilder.build(SyntheticRoom.planes())
+        val table = plan.objects.single()
+        assertEquals(0.0, table.baseHeight)
+        assertEquals(0.75, table.height, 1e-9)
+        assertTrue(table.center.distanceTo(SyntheticRoom.p(1.5, 1.5)) < 0.15, "table at ${table.center}")
+    }
+
+    /**
+     * Wall pieces from a real Pixel 8 Pro scan of a square room (local meters, location removed). ARCore
+     * saw the walls in pieces plus a few furniture faces at odd angles; the result must be one closed,
+     * squared room.
+     */
+    @Test
+    fun pixelScanBecomesClosedRectangle() {
+        val pieces = listOf(
+            -0.44 to 1.97 to (-0.05 to 1.68), -2.55 to -0.77 to (-1.83 to 0.20), -0.63 to 0.70 to (-0.44 to 1.97),
+            -3.17 to -1.32 to (-2.99 to -1.08), -1.24 to -2.91 to (-2.48 to -2.00), -0.92 to -2.68 to (-1.81 to -2.71),
+            0.15 to -1.03 to (-1.24 to -2.91), -0.63 to 0.70 to (-0.01 to 0.66), -1.50 to 0.64 to (-1.06 to 1.23),
+        ).mapIndexed { i, (a, b) ->
+            val pa = Vec2(a.first, a.second)
+            val pb = Vec2(b.first, b.second)
+            val n = (pb - pa).normalized().perp()
+            PlaneObservation(
+                "w$i", PlaneKind.WALL, Vec3(n.x, 0.0, -n.y),
+                listOf(pa.toWorld(-1.1), pb.toWorld(-1.1), pb.toWorld(0.2), pa.toWorld(0.2)),
+            )
+        }
+        val floor = PlaneObservation(
+            "floor", PlaneKind.FLOOR, Vec3(0.0, 1.0, 0.0),
+            listOf(Vec2(-2.0, -2.0), Vec2(-0.5, -2.0), Vec2(-0.5, 0.5), Vec2(-2.0, 0.5)).map { it.toWorld(-1.4) },
         )
-        val o = DetectionProjector.project(frame, d, floorY, null)!!
-        assertEquals("chair", o.category)
-        assertEquals(0.9, o.height, 0.05)
-        assertEquals(0.5, o.width, 0.05)
-        // Center is pushed back by half the default chair depth.
-        val expected = front.toPlan() + (front.toPlan().normalized() * 0.25)
-        assertTrue(o.center.distanceTo(expected) < 0.05, "center ${o.center} vs $expected")
-    }
-
-    @Test
-    fun ignoresUnknownLabels() {
-        val d = Detection2D("person", 0.9, Vec2(320.0, 400.0), Vec2(320.0, 100.0), Vec2(300.0, 400.0), Vec2(340.0, 400.0), false)
-        assertEquals(null, DetectionProjector.project(frame, d, -1.4, null))
-    }
-
-    @Test
-    fun uprightRotationRoundTrip() {
-        // Portrait phone: the upright image is the 640x480 sensor image rotated 90° clockwise.
-        // The upright top-left corner is the sensor's bottom-left.
-        assertEquals(Vec2(0.0, 480.0), Detection2D.uprightToSensor(0.0, 0.0, 90, 640.0, 480.0))
-        assertEquals(Vec2(640.0, 0.0), Detection2D.uprightToSensor(1.0, 1.0, 90, 640.0, 480.0))
-        assertEquals(Vec2(640.0, 0.0), Detection2D.uprightToSensor(0.0, 0.0, 270, 640.0, 480.0))
+        val plan = FloorPlanBuilder.build(pieces + floor)
+        assertEquals(4, plan.walls.size, "walls: ${plan.walls}")
+        for (i in 0 until 4) {
+            val a = plan.walls[i]
+            val b = plan.walls[(i + 1) % 4]
+            assertTrue(a.end.distanceTo(b.start) < 1e-6, "walls $i and ${i + 1} don't meet")
+            val cos = ((a.end - a.start).normalized() dot (b.end - b.start).normalized())
+            assertTrue(abs(cos) < 1e-6, "corner $i is not square")
+        }
+        val area = abs(Geometry.signedArea(plan.floor))
+        assertTrue(area in 8.0..12.0, "area $area")
     }
 }
 
-class TrackerAndGeorefTest {
+class ObjectFinderTest {
     @Test
-    fun mergesRepeatedSightings() {
-        val t = ObjectTracker(minObservations = 2)
-        t.add(Detection3D("sofa", Vec2(1.0, 2.0), 2.0, 0.9, 0.8, 0.0, 0.0, 0.7))
-        t.add(Detection3D("sofa", Vec2(1.2, 2.1), 2.1, 0.9, 0.85, 0.05, 0.0, 0.9))
-        t.add(Detection3D("chair", Vec2(3.0, 0.0), 0.5, 0.5, 0.9, 0.0, 0.0, 0.9)) // seen once: dropped
-        val objs = t.objects()
-        assertEquals(1, objs.size)
-        assertEquals(2, objs[0].observations)
-        assertTrue(objs[0].center.distanceTo(Vec2(1.11, 2.06)) < 0.02)
+    fun boxOfPointsBecomesOneObjectAndWallPointsDont() {
+        val points = mutableListOf<Vec3>()
+        // A 1.8 x 0.9 m sofa, 0.85 m tall, in room coordinates.
+        var x = 1.0
+        while (x <= 2.8) {
+            var y = 3.6
+            while (y <= 4.5) {
+                points += SyntheticRoom.p(x, y).toWorld(SyntheticRoom.FLOOR_Y + 0.85)
+                points += SyntheticRoom.p(x, y).toWorld(SyntheticRoom.FLOOR_Y + 0.4)
+                y += 0.1
+            }
+            x += 0.1
+        }
+        // Feature points on a wall and just above the floor must be ignored.
+        for (k in 0..40) {
+            points += SyntheticRoom.p(0.05 * k, 0.02).toWorld(SyntheticRoom.FLOOR_Y + 1.2)
+            points += SyntheticRoom.p(3.0, 0.1 * k).toWorld(SyntheticRoom.FLOOR_Y + 0.03)
+        }
+        val plan = FloorPlanBuilder.build(SyntheticRoom.planes().filter { it.id != "table" }, points)
+        val sofa = plan.objects.single()
+        assertEquals(0.0, sofa.baseHeight)
+        assertEquals(0.85, sofa.height, 0.02)
+        assertEquals(1.9, sofa.width, 0.25)
+        assertEquals(1.0, sofa.depth, 0.25)
+        assertTrue(sofa.center.distanceTo(SyntheticRoom.p(1.9, 4.05)) < 0.15, "sofa at ${sofa.center}")
     }
+}
 
+class GeorefTest {
     @Test
     fun georefRotatesPlanToNorth() {
         // Camera looks along world -X while the compass says that's due north.

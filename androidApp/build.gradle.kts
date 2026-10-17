@@ -1,5 +1,4 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-import java.net.URI
 
 plugins {
     id("com.android.application")
@@ -43,10 +42,6 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-
-    androidResources {
-        noCompress += "tflite"
-    }
 }
 
 kotlin {
@@ -56,19 +51,5 @@ kotlin {
 dependencies {
     implementation(project(":shared"))
     implementation("com.google.ar:core:1.46.0")
-    implementation("com.google.mediapipe:tasks-vision:0.10.14")
     implementation("androidx.core:core-ktx:1.13.1")
 }
-
-// EfficientDet-Lite0 (COCO classes) for MediaPipe; downloaded once instead of committed.
-val downloadDetectorModel by tasks.registering {
-    val out = file("src/main/assets/efficientdet_lite0.tflite")
-    outputs.file(out)
-    onlyIf { !out.exists() }
-    doLast {
-        out.parentFile.mkdirs()
-        URI("https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/int8/1/efficientdet_lite0.tflite")
-            .toURL().openStream().use { input -> out.outputStream().use { input.copyTo(it) } }
-    }
-}
-tasks.named("preBuild") { dependsOn(downloadDetectorModel) }

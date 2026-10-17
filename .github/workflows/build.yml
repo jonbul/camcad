@@ -59,12 +59,6 @@ jobs:
       - name: Build Kotlin framework
         run: ./gradlew -Peyecad.skipAndroid :shared:assembleSharedReleaseXCFramework
 
-      - name: Download object detection model
-        continue-on-error: true
-        run: |
-          curl -fL --retry 3 -o iosApp/Eyecad/Models/YOLOv3Tiny.mlmodel \
-            https://ml-assets.apple.com/coreml/models/Image/ObjectDetection/YOLOv3Tiny/YOLOv3Tiny.mlmodel
-
       - name: Generate Xcode project
         run: |
           brew install xcodegen

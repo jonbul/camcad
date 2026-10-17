@@ -126,7 +126,7 @@ struct ContentView: View {
 
     private var cameraStatus: String {
         guard let s = camera.stats else { return camera.message }
-        return "\(camera.message)\nWalls: \(s.walls)  Objects: \(s.objects)  Surfaces: \(s.planes)"
+        return "\(camera.message)\nWalls: \(s.walls)  Objects: \(s.objects)  Points: \(s.points)"
     }
 
     private func start() {

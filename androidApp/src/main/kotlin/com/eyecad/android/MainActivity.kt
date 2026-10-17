@@ -55,7 +55,7 @@ class MainActivity : Activity() {
         renderer = ScanRenderer(this, orientation) { stats, message ->
             runOnUiThread {
                 status.text = if (stats == null) message else
-                    "$message\nWalls: ${stats.walls}   Objects: ${stats.objects}   Surfaces: ${stats.planes}"
+                    "$message\nWalls: ${stats.walls}   Objects: ${stats.objects}   Points: ${stats.points}"
             }
         }
 
@@ -145,7 +145,6 @@ class MainActivity : Activity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        renderer.release()
         session?.close()
         session = null
     }

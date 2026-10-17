@@ -38,6 +38,6 @@ class PreviewTest {
         // Tops of everything plus at least one visible side per standing box.
         assertTrue(view.polygons.size >= m.solids.size + (m.solids.size - 1))
         assertEquals("room", view.polygons.first().kind)
-        assertEquals(2, view.labels.size)
+        assertEquals(m.solids.count { it.kind == "object" }, view.labels.size) // every object shows its height
     }
 }

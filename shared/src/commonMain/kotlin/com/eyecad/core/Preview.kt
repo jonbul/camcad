@@ -34,13 +34,14 @@ class PreviewModel(val solids: List<PreviewSolid>, val title: String) {
             val walls = solids.count { it.kind == "wall" }
             val openings = solids.count { it.kind == "door" || it.kind == "window" || it.kind == "opening" }
             val objects = solids.filter { it.kind == "object" }
-            val byCategory = objects.groupingBy { it.label }.eachCount().entries
+            val named = objects.filter { it.label != "object" }
+            val byCategory = named.groupingBy { it.label }.eachCount().entries
                 .sortedByDescending { it.value }.joinToString(", ") { "${it.value} ${it.key}" }
             val area = solids.firstOrNull { it.kind == "room" }?.let { kotlin.math.abs(Geometry.signedArea(it.footprint)) }
             return buildList {
                 add("$walls walls")
                 add("$openings doors/windows")
-                add(if (objects.isEmpty()) "0 objects" else "${objects.size} objects ($byCategory)")
+                add(if (named.isEmpty()) "${objects.size} objects" else "${objects.size} objects ($byCategory)")
                 if (area != null) add("${Format.num(area, 1)} m²")
             }.joinToString(" · ")
         }
@@ -216,7 +217,10 @@ object PreviewRenderer {
     }
 
     private fun labels(model: PreviewModel, at: (PreviewSolid) -> Vec2) =
-        model.solids.filter { it.kind == "object" }.map { DrawLabel(it.label, at(it)) }
+        model.solids.filter { it.kind == "object" }.map {
+            // Camera scans don't name objects, so show their height instead.
+            DrawLabel(if (it.label == "object") "${Format.num(it.top - it.base, 2)} m" else it.label, at(it))
+        }
 
     private fun centroid(pts: List<Vec2>) = Vec2(pts.sumOf { it.x } / pts.size, pts.sumOf { it.y } / pts.size)
 }

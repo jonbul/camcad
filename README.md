@@ -1,23 +1,23 @@
 # Eyecad
 
-Scan a room with your phone and get a **2D/3D GeoJSON map** and a **3D model (OBJ)** with the walls, doors, windows and furniture identified. No colours or textures are stored: only geometry and labels.
+Scan a room with your phone and get a **2D/3D GeoJSON map** and a **3D model (OBJ)** that separate the room (floor and walls) from the objects in it. No colours or textures are stored: only geometry.
 
 | Device | How it scans | What it finds |
 |---|---|---|
-| iPhone / iPad with LiDAR (Pro models) | Apple RoomPlan | Walls, doors, windows, openings, floor outline, 16 furniture/appliance types, true scale (≈1–2 % error) |
-| iPhone without LiDAR | ARKit planes + on-device object detection (YOLOv3-Tiny) | Walls, floor, doors/windows (ARKit plane classification), furniture |
-| Android with ARCore | ARCore planes + on-device object detection (MediaPipe EfficientDet-Lite0) | Walls, floor, furniture |
+| iPhone / iPad with LiDAR (Pro models) | Apple RoomPlan | Walls, doors, windows, openings, floor outline, furniture boxes, true scale (≈1–2 % error) |
+| iPhone without LiDAR | ARKit planes + feature points | Walls, floor, doors/windows (ARKit plane classification), objects |
+| Android with ARCore | ARCore planes + feature points | Walls, floor, objects |
 
-Camera-only scans are less accurate than LiDAR: walls come from detected planes and object depth is estimated from typical sizes.
+Objects are found from geometry, not recognised: anything that stands inside the room away from the walls (feature points, table and seat tops, furniture sides) becomes an object box with its footprint and height. In camera scans the room is squared up into a rectangle from the outer wall lines, so rooms that aren't rectangular come out as their bounding rectangle.
 
 ## Project layout
 
 ```
-shared/       Kotlin Multiplatform core (Android + iOS): wall reconstruction, object placement and
-              tracking, georeferencing, GeoJSON and OBJ export. All the logic lives here.
-androidApp/   Android app in Kotlin: ARCore capture, MediaPipe detection, file sharing.
-iosApp/       iOS app: thin Swift layer for RoomPlan / ARKit / Vision (these APIs are Swift-only
-              or callback-based), passing raw data to the shared Kotlin core.
+shared/       Kotlin Multiplatform core (Android + iOS): wall reconstruction, geometric object
+              detection, georeferencing, GeoJSON and OBJ export. All the logic lives here.
+androidApp/   Android app in Kotlin: ARCore capture, file saving and sharing, preview.
+iosApp/       iOS app: thin Swift layer for RoomPlan / ARKit (these APIs are Swift-only),
+              passing raw planes and points to the shared Kotlin core.
 samples/      Example exports produced by the tests from synthetic rooms.
 docs/         Output format reference.
 ```
@@ -57,8 +57,6 @@ Without secrets the APK is signed with a debug key, which installs fine. For a s
 
 # iOS (macOS with Xcode 16 and XcodeGen)
 ./gradlew -Peyecad.skipAndroid :shared:assembleSharedReleaseXCFramework
-curl -L -o iosApp/Eyecad/Models/YOLOv3Tiny.mlmodel \
-  https://ml-assets.apple.com/coreml/models/Image/ObjectDetection/YOLOv3Tiny/YOLOv3Tiny.mlmodel
 cd iosApp && xcodegen generate && open Eyecad.xcodeproj
 ```
 

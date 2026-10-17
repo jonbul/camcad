@@ -13,31 +13,29 @@ class SampleExportTest {
     fun cameraModeExport() {
         val session = CameraScanSession(CaptureMode.CAMERA_ARCORE)
         SyntheticRoom.planes().forEach(session::upsertPlane)
-        val frame = CameraFrame(
-            Pose.lookingAlong(SyntheticRoom.p(2.0, 0.5).toWorld(SyntheticRoom.FLOOR_Y + 1.4), (SyntheticRoom.p(2.0, 3.0) - SyntheticRoom.p(2.0, 0.5)).toWorld(-0.5)),
-            500.0, 500.0, 320.0, 240.0, 640.0, 480.0,
-        )
-        fun pixel(p: Vec3): Vec2 {
-            val d = p - frame.pose.position
-            val z = d dot frame.pose.back
-            return Vec2(frame.cx + frame.fx * (d dot frame.pose.right) / -z, frame.cy - frame.fy * (d dot frame.pose.up) / -z)
+        // Feature points on a sofa (1.8 x 0.9 m, 0.85 m tall) and an armchair; the table top is a plane.
+        var id = 0L
+        fun box(x0: Double, y0: Double, w: Double, d: Double, h: Double) {
+            var x = x0
+            while (x <= x0 + w) {
+                var y = y0
+                while (y <= y0 + d) {
+                    for (z in listOf(h, h / 2)) {
+                        val p = SyntheticRoom.p(x, y).toWorld(SyntheticRoom.FLOOR_Y + z)
+                        session.addPoint(id++, p.x, p.y, p.z)
+                    }
+                    y += 0.1
+                }
+                x += 0.1
+            }
         }
-        fun sighting(label: String, front: Vec2, width: Double, height: Double): Detection2D {
-            val f = front.toWorld(SyntheticRoom.FLOOR_Y)
-            val half = frame.pose.right * (width / 2)
-            return Detection2D(label, 0.8, pixel(f), pixel(f + Vec3(0.0, height, 0.0)), pixel(f - half), pixel(f + half), false)
-        }
-        repeat(3) {
-            session.addDetections(
-                frame,
-                listOf(sighting("couch", SyntheticRoom.p(2.0, 3.6), 1.8, 0.85), sighting("chair", SyntheticRoom.p(1.0, 2.2), 0.5, 0.9)),
-                null,
-            )
-            session.addHeadingSample(frame.pose.forward, 75.0)
-        }
+        box(1.0, 3.6, 1.8, 0.9, 0.85)
+        box(3.0, 2.0, 0.6, 0.6, 0.9)
+        val forward = (SyntheticRoom.p(2.0, 3.0) - SyntheticRoom.p(2.0, 0.5)).toWorld(0.0)
+        repeat(3) { session.addHeadingSample(forward, 75.0) }
         val export = session.export("Synthetic test", "2026-10-17T15:00:00Z", 43.2630, -2.9350, 20.0, null)
         assertEquals(4, export.plan.walls.size)
-        assertEquals(setOf("sofa", "chair"), export.plan.objects.map { it.category }.toSet())
+        assertEquals(3, export.plan.objects.size, "objects: ${export.plan.objects}")
         File(samples, "camera-room.geojson").writeText(export.geoJson)
         File(samples, "camera-room.obj").writeText(export.obj)
         assertTrue(export.geoJson.contains("\"crs\":\"EPSG:4326\""))

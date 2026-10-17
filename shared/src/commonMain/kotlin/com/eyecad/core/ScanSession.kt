@@ -1,7 +1,7 @@
 package com.eyecad.core
 
 /** Live counters for the scanning screen. */
-data class ScanStats(val planes: Int, val walls: Int, val objects: Int, val headingSamples: Int)
+data class ScanStats(val planes: Int, val walls: Int, val objects: Int, val points: Int, val headingSamples: Int)
 
 /** Both export files for one scan. */
 data class ScanExport(val geoJson: String, val obj: String, val plan: FloorPlan)
@@ -10,12 +10,12 @@ data class ScanExport(val geoJson: String, val obj: String, val plan: FloorPlan)
  * The shared brain of a camera-only scan (ARCore on Android, ARKit on iPhones without LiDAR).
  *
  * The platform layer only forwards what its AR framework reports: planes as they appear and change,
- * object detections with the camera frame they came from, and compass readings. Call it from one
- * thread (the AR callback thread).
+ * tracked feature points, and compass readings. Call it from one thread (the AR callback thread).
  */
 class CameraScanSession(private val mode: CaptureMode) {
     private val planes = LinkedHashMap<String, PlaneObservation>()
-    private val tracker = ObjectTracker(minObservations = 2)
+    // Latest position per tracked point id, oldest first so the cap drops stale points.
+    private val points = LinkedHashMap<Long, Vec3>()
     private val heading = HeadingCalibrator()
     private var lastCameraY: Double? = null
 
@@ -27,27 +27,25 @@ class CameraScanSession(private val mode: CaptureMode) {
         planes.remove(id)
     }
 
-    /** Projects detections from one frame into the room. Returns how many were placed. */
-    fun addDetections(frame: CameraFrame, detections: List<Detection2D>, hitTest: HitTester?): Int {
-        lastCameraY = frame.pose.position.y
-        val floorY = currentFloorY()
-        var placed = 0
-        for (d in detections) {
-            val d3 = DetectionProjector.project(frame, d, floorY, hitTest) ?: continue
-            tracker.add(d3)
-            placed++
-        }
-        return placed
+    /** Adds or moves a tracked feature point (ARCore point cloud / ARKit raw feature points). */
+    fun addPoint(id: Long, x: Double, y: Double, z: Double) {
+        points.remove(id)
+        points[id] = Vec3(x, y, z)
+        if (points.size > MAX_POINTS) points.remove(points.keys.first())
+    }
+
+    fun updateCamera(position: Vec3) {
+        lastCameraY = position.y
     }
 
     fun addHeadingSample(cameraForward: Vec3, trueBearingDeg: Double) = heading.addSample(cameraForward, trueBearingDeg)
 
     fun stats(): ScanStats {
-        val plan = FloorPlanBuilder.build(planes.values.toList(), emptyList(), currentFloorY())
-        return ScanStats(planes.size, plan.walls.size, tracker.objects().size, heading.samples)
+        val plan = floorPlan()
+        return ScanStats(planes.size, plan.walls.size, plan.objects.size, points.size, heading.samples)
     }
 
-    fun floorPlan(): FloorPlan = FloorPlanBuilder.build(planes.values.toList(), tracker.objects(), currentFloorY())
+    fun floorPlan(): FloorPlan = FloorPlanBuilder.build(planes.values.toList(), points.values.toList(), currentFloorY())
 
     /**
      * When the AR session itself is aligned to true north (ARKit gravityAndHeading), pass [rotationDeg] = 0
@@ -71,6 +69,10 @@ class CameraScanSession(private val mode: CaptureMode) {
     /** Before the floor is detected, assume it is ~1.4 m below the phone. */
     private fun currentFloorY(): Double =
         FloorPlanBuilder.floorHeight(planes.values.toList()) ?: ((lastCameraY ?: 0.0) - 1.4)
+
+    private companion object {
+        const val MAX_POINTS = 60_000
+    }
 }
 
 /** Helpers for the LiDAR path, where RoomPlan already produced the room. */

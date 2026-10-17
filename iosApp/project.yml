@@ -15,14 +15,11 @@ targets:
     platform: iOS
     sources:
       - path: Eyecad
-        excludes:
-          - "**/.gitkeep"
     dependencies:
       - framework: ../shared/build/XCFrameworks/release/Shared.xcframework
         embed: true
       - sdk: ARKit.framework
       - sdk: RoomPlan.framework
-      - sdk: Vision.framework
     info:
       path: Eyecad/Info.plist
       properties:

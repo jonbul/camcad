@@ -142,6 +142,26 @@ object Geometry {
         return tris
     }
 
+    /** Even-odd point-in-polygon test. */
+    fun contains(poly: List<Vec2>, p: Vec2): Boolean {
+        var inside = false
+        var j = poly.size - 1
+        for (i in poly.indices) {
+            val a = poly[i]; val b = poly[j]
+            if ((a.y > p.y) != (b.y > p.y) && p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x) inside = !inside
+            j = i
+        }
+        return inside
+    }
+
+    fun distanceToSegment(p: Vec2, a: Vec2, b: Vec2): Double {
+        val ab = b - a
+        val len2 = ab dot ab
+        if (len2 < 1e-12) return p.distanceTo(a)
+        val t = (((p - a) dot ab) / len2).coerceIn(0.0, 1.0)
+        return p.distanceTo(a + ab * t)
+    }
+
     /** Corners of a rectangle centered at [c] whose width axis points along [yaw] (radians from plan +x). */
     fun rectangle(c: Vec2, width: Double, depth: Double, yaw: Double): List<Vec2> {
         val u = Vec2.fromAngle(yaw) * (width / 2)

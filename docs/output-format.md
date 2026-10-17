@@ -20,15 +20,15 @@ Two properties make every feature extrudable into 3D, following the MapLibre/Map
 | `room` | `area_m2`, `ceiling_height_m`, `ceiling_estimated` (true when the ceiling wasn't measured and 2.5 m is assumed) |
 | `wall` | `length_m`, `thickness_m`, `confidence` |
 | `door`, `window`, `opening` | `width_m`, `height_m`, `confidence` |
-| `object` | `category`, `width_m`, `depth_m`, `height_m`, `confidence`, `observations` (how many camera frames confirmed it) |
+| `object` | `category`, `width_m`, `depth_m`, `height_m`, `confidence`, `observations` (how many feature points support it) |
 
-`confidence` is 0–1. For LiDAR scans it is RoomPlan's high/medium/low (0.9/0.6/0.3); for camera scans it is the detector score.
+`confidence` is 0–1. For LiDAR scans it is RoomPlan's high/medium/low (0.9/0.6/0.3); for camera objects it grows with how many feature points and surfaces support the box, and for camera walls with how much of the wall was actually seen (0.2 means that side was inferred to close the room).
 
 ### Object categories
 
-`bathtub`, `bed`, `bench`, `bicycle`, `chair`, `clock`, `dishwasher`, `fireplace`, `laptop`, `microwave`, `oven`, `plant`, `refrigerator`, `sink`, `sofa`, `stairs`, `storage`, `stove`, `suitcase`, `table`, `television`, `toilet`, `vase`, `washer_dryer`.
+Camera scans don't recognise objects, so their `category` is always `object`: a box for anything standing in the room that isn't floor or wall.
 
-LiDAR scans use RoomPlan's set (`storage`, `refrigerator`, `stove`, `bed`, `sink`, `washer_dryer`, `toilet`, `bathtub`, `oven`, `dishwasher`, `table`, `sofa`, `chair`, `fireplace`, `television`, `stairs`); camera scans use the indoor subset of the COCO classes mapped onto the same names.
+LiDAR scans keep RoomPlan's category names (`storage`, `refrigerator`, `stove`, `bed`, `sink`, `washer_dryer`, `toilet`, `bathtub`, `oven`, `dishwasher`, `table`, `sofa`, `chair`, `fireplace`, `television`, `stairs`), since RoomPlan provides them for free.
 
 ### Top-level `eyecad` member
 
