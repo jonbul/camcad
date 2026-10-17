@@ -7,7 +7,6 @@ pluginManagement {
     plugins {
         kotlin("multiplatform") version "2.1.21"
         kotlin("android") version "2.1.21"
-        id("com.android.application") version "8.7.3"
     }
 }
 
