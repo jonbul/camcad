@@ -66,7 +66,8 @@ cd iosApp && xcodegen generate && open Eyecad.xcodeproj
 
 1. Open Eyecad and tap **Start**. On LiDAR iPhones pick *LiDAR room scan* (best) or *Camera scan*.
 2. Walk slowly along the walls, pointing the camera at each wall, the floor and the furniture.
-3. Tap **Finish**. The app saves `scan-<date>.geojson` and `scan-<date>.obj` and opens the share sheet.
+3. Tap **Finish**. The app asks where to save `scan-<date>.geojson` and `scan-<date>.obj`: the default folder (Documents/Eyecad on Android, Files › On My iPhone › Eyecad › scans on iOS) or a folder you choose, which then becomes the default.
+4. **Save**, **Share** and **Preview** stay available until you start a new scan. Preview shows the result as a 2D plan or a 3D view you can turn and zoom; **Open…** previews any saved `.geojson` or `.obj`.
 
 Allow location access so the map is placed on the globe; without it the GeoJSON uses local meters.
 

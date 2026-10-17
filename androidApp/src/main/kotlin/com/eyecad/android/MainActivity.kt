@@ -2,6 +2,7 @@ package com.eyecad.android
 
 import android.Manifest
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
@@ -10,6 +11,7 @@ import android.opengl.GLSurfaceView
 import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
+import android.view.View
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.widget.Button
@@ -33,17 +35,23 @@ import java.util.Locale
 class MainActivity : Activity() {
     private lateinit var glView: GLSurfaceView
     private lateinit var status: TextView
-    private lateinit var startButton: Button
-    private lateinit var finishButton: Button
+    private lateinit var scanButton: Button
+    private lateinit var saveButton: Button
+    private lateinit var shareButton: Button
+    private lateinit var previewButton: Button
+    private lateinit var saveLocation: SaveLocation
     private lateinit var renderer: ScanRenderer
     private lateinit var orientation: OrientationProvider
     private var session: Session? = null
     private var installRequested = false
-    private var lastExport: List<File> = emptyList()
+    private var scanning = false
+    /** Files of the last finished scan; Save, Share and Preview stay available until a new scan starts. */
+    private var lastFiles: List<File> = emptyList()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         orientation = OrientationProvider(this)
+        saveLocation = SaveLocation(this)
         renderer = ScanRenderer(this, orientation) { stats, message ->
             runOnUiThread {
                 status.text = if (stats == null) message else
@@ -65,14 +73,22 @@ class MainActivity : Activity() {
             textSize = 15f
             text = "Starting camera…"
         }
-        startButton = Button(this).apply { text = "Start"; setOnClickListener { startScan() } }
-        finishButton = Button(this).apply { text = "Finish & share"; isEnabled = false; setOnClickListener { finishScan() } }
-        val buttons = LinearLayout(this).apply {
+        scanButton = Button(this).apply { text = "Start scan"; setOnClickListener { if (scanning) finishScan() else startScan() } }
+        saveButton = Button(this).apply { text = "Save"; setOnClickListener { askWhereToSave() } }
+        shareButton = Button(this).apply { text = "Share"; setOnClickListener { share(lastFiles) } }
+        previewButton = Button(this).apply { text = "Preview"; setOnClickListener { previewLast() } }
+        val openButton = Button(this).apply { text = "Open…"; setOnClickListener { openFile() } }
+        updateButtons()
+        fun row(vararg views: View) = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
+            views.forEach { addView(it, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)) }
+        }
+        val buttons = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             setPadding(24, 24, 24, 72)
-            addView(startButton, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
-            addView(finishButton, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+            addView(row(scanButton), LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+            addView(row(saveButton, shareButton, previewButton, openButton), LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         }
         setContentView(FrameLayout(this).apply {
             addView(glView, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
@@ -134,17 +150,30 @@ class MainActivity : Activity() {
         session = null
     }
 
+    private fun updateButtons() {
+        scanButton.text = when {
+            scanning -> "Finish"
+            lastFiles.isNotEmpty() -> "New scan"
+            else -> "Start scan"
+        }
+        val hasScan = !scanning && lastFiles.isNotEmpty()
+        saveButton.isEnabled = hasScan
+        shareButton.isEnabled = hasScan
+        previewButton.isEnabled = hasScan
+    }
+
     private fun startScan() {
         glView.queueEvent {
             renderer.reset()
             renderer.scanning = true
         }
-        startButton.isEnabled = false
-        finishButton.isEnabled = true
+        scanning = true
+        lastFiles = emptyList()
+        updateButtons()
     }
 
     private fun finishScan() {
-        finishButton.isEnabled = false
+        scanButton.isEnabled = false
         val loc = orientation.location
         glView.queueEvent {
             renderer.scanning = false
@@ -154,20 +183,75 @@ class MainActivity : Activity() {
                 loc?.latitude, loc?.longitude, loc?.takeIf { it.hasAltitude() }?.altitude,
                 null,
             )
-            runOnUiThread { save(export) }
+            runOnUiThread { finished(export) }
         }
     }
 
-    private fun save(export: ScanExport) {
-        val dir = File(getExternalFilesDir(null) ?: filesDir, "scans").apply { mkdirs() }
+    private fun finished(export: ScanExport) {
+        // Kept in the cache until the next scan, so it can be saved, shared or previewed any number of times.
+        val dir = File(cacheDir, "scans").apply { deleteRecursively(); mkdirs() }
         val name = "scan-" + SimpleDateFormat("yyyyMMdd-HHmmss", Locale.ROOT).format(Date())
-        val geo = File(dir, "$name.geojson").apply { writeText(export.geoJson) }
-        val obj = File(dir, "$name.obj").apply { writeText(export.obj) }
-        lastExport = listOf(geo, obj)
-        startButton.isEnabled = true
-        startButton.text = "New scan"
-        status.text = "Saved ${export.plan.walls.size} walls and ${export.plan.objects.size} objects to ${dir.absolutePath}"
-        share(lastExport)
+        lastFiles = listOf(
+            File(dir, "$name.geojson").apply { writeText(export.geoJson) },
+            File(dir, "$name.obj").apply { writeText(export.obj) },
+        )
+        scanning = false
+        scanButton.isEnabled = true
+        updateButtons()
+        status.text = "Mapped ${export.plan.walls.size} walls and ${export.plan.objects.size} objects."
+        askWhereToSave()
+    }
+
+    private fun askWhereToSave() {
+        AlertDialog.Builder(this)
+            .setTitle("Save scan")
+            .setMessage("Save ${lastFiles.joinToString(" and ") { it.name }} to ${saveLocation.label}?")
+            .setPositiveButton("Save here") { _, _ -> saveToDefault() }
+            .setNeutralButton("Choose folder…") { _, _ ->
+                startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE), REQUEST_FOLDER)
+            }
+            .setNegativeButton("Not now", null)
+            .show()
+    }
+
+    private fun saveToDefault() {
+        try {
+            val where = saveLocation.save(lastFiles)
+            status.text = "Saved to $where"
+            Toast.makeText(this, "Saved to $where", Toast.LENGTH_LONG).show()
+        } catch (e: Exception) {
+            // A folder that disappeared or lost its permission falls back to the built-in default.
+            saveLocation.resetToDefault()
+            Toast.makeText(this, "Couldn't save: ${e.message}. Default folder reset to ${saveLocation.label}.", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun previewLast() {
+        val geo = lastFiles.firstOrNull { it.name.endsWith(".geojson") } ?: return
+        startActivity(Intent(this, PreviewActivity::class.java).putExtra(PreviewActivity.EXTRA_PATH, geo.absolutePath))
+    }
+
+    private fun openFile() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
+        }
+        startActivityForResult(intent, REQUEST_OPEN)
+    }
+
+    @Deprecated("Activity result API needs AndroidX activity; plain Activity uses this")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        val uri = data?.data
+        if (resultCode != RESULT_OK || uri == null) return
+        when (requestCode) {
+            REQUEST_FOLDER -> {
+                saveLocation.rememberFolder(uri)
+                saveToDefault()
+                Toast.makeText(this, "${saveLocation.label} is now the default folder", Toast.LENGTH_SHORT).show()
+            }
+            REQUEST_OPEN -> startActivity(Intent(this, PreviewActivity::class.java).setData(uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
+        }
     }
 
     private fun share(files: List<File>) {
@@ -186,6 +270,8 @@ class MainActivity : Activity() {
 
     private companion object {
         const val REQUEST_PERMISSIONS = 1
+        const val REQUEST_FOLDER = 2
+        const val REQUEST_OPEN = 3
         val PERMISSIONS = arrayOf(Manifest.permission.CAMERA, Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
     }
 }

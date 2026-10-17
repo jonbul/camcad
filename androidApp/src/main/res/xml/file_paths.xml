@@ -1,5 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
-    <external-files-path name="scans_external" path="scans/" />
-    <files-path name="scans_internal" path="scans/" />
+    <cache-path name="scans_cache" path="scans/" />
 </paths>

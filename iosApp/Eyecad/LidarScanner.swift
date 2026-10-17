@@ -42,7 +42,7 @@ final class LidarScanner: ObservableObject {
                 longitude: KotlinBridge.double(l?.coordinate.longitude),
                 altitude: KotlinBridge.double(l.map { $0.altitude })
             )
-            completion(Result { (export, try KotlinBridge.save(export)) })
+            completion(Result { (export, try KotlinBridge.stage(export)) })
         }
         controller.stop()
     }

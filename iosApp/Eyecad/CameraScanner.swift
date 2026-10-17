@@ -49,7 +49,7 @@ final class CameraScanner: NSObject, ObservableObject, ARSessionDelegate {
             altitude: KotlinBridge.double(l.map { $0.altitude }),
             rotationDeg: KotlinDouble(value: 0)
         )
-        return (export, try KotlinBridge.save(export))
+        return (export, try KotlinBridge.stage(export))
     }
 
     // MARK: Planes

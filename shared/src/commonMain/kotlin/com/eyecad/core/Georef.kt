@@ -32,6 +32,14 @@ data class Georef(
         return Vec2(lon, lat)
     }
 
+    /** Inverse of [toLonLat]: the plan point at a longitude/latitude. */
+    fun fromLonLat(lon: Double, lat: Double): Vec2 {
+        val e = (lon - longitude) * METERS_PER_DEGREE * cos(latitude * PI / 180)
+        val n = (lat - latitude) * METERS_PER_DEGREE
+        val t = rotationDeg * PI / 180
+        return Vec2(e * cos(t) - n * sin(t), e * sin(t) + n * cos(t))
+    }
+
     companion object {
         const val METERS_PER_DEGREE = 111_320.0
 

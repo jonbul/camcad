@@ -36,10 +36,11 @@ enum KotlinBridge {
 
     static var now: String { ISO8601DateFormatter().string(from: Date()) }
 
-    /// Writes both export files to Documents/scans (visible in the Files app) and returns their URLs.
-    static func save(_ export: ScanExport) throws -> [URL] {
-        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let dir = docs.appendingPathComponent("scans", isDirectory: true)
+    /// Writes both export files to a staging folder, where they stay until the next scan so they can be
+    /// saved, shared and previewed any number of times.
+    static func stage(_ export: ScanExport) throws -> [URL] {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("scans", isDirectory: true)
+        try? FileManager.default.removeItem(at: dir)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
